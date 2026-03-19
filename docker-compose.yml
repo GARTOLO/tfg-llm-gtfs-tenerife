@@ -1,0 +1,16 @@
+services:
+  db:
+    image: postgis/postgis
+    container_name: tfg_postgis
+    environment:
+      - POSTGRES_USER=postgres_user
+      - POSTGRES_PASSWORD=postgres_password
+      - POSTGRES_DB=gtfs_titsa
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./data/raw:/data/raw
+
+volumes:
+  pg_data:
