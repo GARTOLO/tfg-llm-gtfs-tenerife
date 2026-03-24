@@ -2,14 +2,7 @@ import os
 import zipfile
 import psycopg2
 
-# Database connection parameters (Matching docker-compose.yml)
-DB_PARAMS = {
-    "dbname": "gtfs_titsa",
-    "user": "postgres_user",
-    "password": "postgres_password",
-    "host": "localhost",
-    "port": "5432"
-}
+from src.config import DB_PARAMS
 
 # Directories
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
