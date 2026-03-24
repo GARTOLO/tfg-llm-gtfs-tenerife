@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 DB_PARAMS = {
-    # os.getenv("NOMBRE_VARIABLE", "valor_por_defecto_si_falla")
+    # os.getenv("VARIABLE_NAME", "default_value")
     "dbname": os.getenv("DB_NAME", "gtfs_titsa"),
     "user": os.getenv("DB_USER", "postgres_user"),
     "password": os.getenv("DB_PASSWORD", "postgres_password"),
