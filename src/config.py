@@ -6,8 +6,8 @@ load_dotenv()
 DB_PARAMS = {
     # os.getenv("NOMBRE_VARIABLE", "valor_por_defecto_si_falla")
     "dbname": os.getenv("DB_NAME", "gtfs_titsa"),
-    "user": os.getenv("DB_USER", "postgres"),
-    "password": os.getenv("DB_PASSWORD", "postgres"),
+    "user": os.getenv("DB_USER", "postgres_user"),
+    "password": os.getenv("DB_PASSWORD", "postgres_password"),
     "host": os.getenv("DB_HOST", "localhost"),
     "port": os.getenv("DB_PORT", "5432")
 }
