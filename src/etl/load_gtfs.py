@@ -102,6 +102,50 @@ CREATE INDEX IF NOT EXISTS idx_trips_route_srv ON gtfs_raw.trips(route_id, servi
 CREATE INDEX IF NOT EXISTS idx_cal_dates ON gtfs_raw.calendar_dates(date, service_id);
 """
 
+# Views for analytical querying and LLM consumption
+VIEWS_QUERIES = """
+-- 1. View: Itinerario de paradas ordenado por línea
+CREATE OR REPLACE VIEW gtfs_raw.v_paradas_por_linea AS
+SELECT DISTINCT 
+    r.route_short_name AS linea, 
+    t.trip_headsign AS destino, 
+    st.stop_sequence AS orden, 
+    s.stop_name AS parada,
+    s.stop_lat,
+    s.stop_lon
+FROM gtfs_raw.routes r
+JOIN gtfs_raw.trips t ON r.route_id = t.route_id
+JOIN gtfs_raw.stop_times st ON t.trip_id = st.trip_id
+JOIN gtfs_raw.stops s ON st.stop_id = s.stop_id
+ORDER BY r.route_short_name, t.trip_headsign, st.stop_sequence;
+
+-- 2. View: Primer y último servicio del día por línea y destino
+CREATE OR REPLACE VIEW gtfs_raw.v_primer_ultimo_servicio AS
+SELECT 
+    r.route_short_name AS linea, 
+    t.trip_headsign AS destino, 
+    MIN(st.arrival_time) AS primer_servicio, 
+    MAX(st.arrival_time) AS ultimo_servicio
+FROM gtfs_raw.routes r
+JOIN gtfs_raw.trips t ON r.route_id = t.route_id
+JOIN gtfs_raw.stop_times st ON t.trip_id = st.trip_id
+GROUP BY r.route_short_name, t.trip_headsign
+ORDER BY r.route_short_name;
+
+-- 3. View: Horarios detallados (simplificados para el LLM)
+CREATE OR REPLACE VIEW gtfs_raw.v_horarios_linea_parada AS
+SELECT 
+    r.route_short_name AS linea, 
+    s.stop_name AS parada, 
+    st.arrival_time AS hora_paso,
+    c.monday AS lunes, c.tuesday AS martes, c.wednesday AS miercoles, 
+    c.thursday AS jueves, c.friday AS viernes, c.saturday AS sabado, c.sunday AS domingo
+FROM gtfs_raw.routes r
+JOIN gtfs_raw.trips t ON r.route_id = t.route_id
+JOIN gtfs_raw.stop_times st ON t.trip_id = st.trip_id
+JOIN gtfs_raw.stops s ON st.stop_id = s.stop_id
+LEFT JOIN gtfs_raw.calendar c ON t.service_id = c.service_id;
+"""
 
 def extract_latest_gtfs():
     """Finds the most recent GTFS zip and extracts it to the staging folder."""
@@ -130,6 +174,17 @@ def extract_latest_gtfs():
         zip_ref.extractall(STAGING_DIR)
 
     return STAGING_DIR
+
+
+def validate_csv_headers(file_path, expected_columns):
+    """Reads the first line of the CSV to validate mandatory columns exist."""
+    with open(file_path, 'r', encoding='utf-8-sig') as f:
+        header = f.readline().strip().split(',')
+
+    missing_cols = [col for col in expected_columns if col not in header]
+    if missing_cols:
+        raise ValueError(f"Validation failed for {os.path.basename(file_path)}: Missing columns {missing_cols}")
+    return True 
 
 
 def load_data_to_postgres(staging_path):
