@@ -132,19 +132,19 @@ JOIN gtfs_raw.stop_times st ON t.trip_id = st.trip_id
 GROUP BY r.route_short_name, t.trip_headsign
 ORDER BY r.route_short_name;
 
--- 3. View: Horarios detallados (simplificados para el LLM)
+-- 3. View: Horarios detallados (Adaptada para TITSA - Lee de calendar_dates)
 CREATE OR REPLACE VIEW gtfs_raw.v_horarios_linea_parada AS
 SELECT 
     r.route_short_name AS linea, 
     s.stop_name AS parada, 
     st.arrival_time AS hora_paso,
-    c.monday AS lunes, c.tuesday AS martes, c.wednesday AS miercoles, 
-    c.thursday AS jueves, c.friday AS viernes, c.saturday AS sabado, c.sunday AS domingo
+    cd.date AS fecha_operacion
 FROM gtfs_raw.routes r
 JOIN gtfs_raw.trips t ON r.route_id = t.route_id
 JOIN gtfs_raw.stop_times st ON t.trip_id = st.trip_id
 JOIN gtfs_raw.stops s ON st.stop_id = s.stop_id
-LEFT JOIN gtfs_raw.calendar c ON t.service_id = c.service_id;
+JOIN gtfs_raw.calendar_dates cd ON t.service_id = cd.service_id
+WHERE cd.exception_type = 1;
 """
 
 def extract_latest_gtfs():
