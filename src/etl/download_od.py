@@ -70,10 +70,14 @@ def download_od_matrices(dataset_id, folder_month):
         fmt = res.get("format", "").upper()
         download_url = res.get("url")
 
-        if "matriz o-d" in name and fmt == "ZIP":
-            target_files.append({"name": res.get("name"), "url": download_url, "ext": ".zip"})
-        elif "zonificación" in name and fmt == "GEOJSON":
-            target_files.append({"name": res.get("name"), "url": download_url, "ext": ".geojson"})
+        if "días laborables" in name and fmt == "ZIP":
+            target_files.append({"name": "laborables", "url": download_url, "ext": ".zip"})
+        elif "días no laborables" in name and fmt == "ZIP":
+            target_files.append({"name": "festivos", "url": download_url, "ext": ".zip"})
+        elif "censal" in name and fmt == "GEOJSON":
+            target_files.append({"name": "zonificacion_censal", "url": download_url, "ext": ".geojson"})
+        elif "títulos" in name and fmt == "CSV":
+            target_files.append({"name": "titulos_transporte", "url": download_url, "ext": ".csv"})
 
     if not target_files:
         print("No matching OD resources found in this dataset.")

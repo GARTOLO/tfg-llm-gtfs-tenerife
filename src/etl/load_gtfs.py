@@ -145,6 +145,56 @@ JOIN gtfs_raw.stop_times st ON t.trip_id = st.trip_id
 JOIN gtfs_raw.stops s ON st.stop_id = s.stop_id
 JOIN gtfs_raw.calendar_dates cd ON t.service_id = cd.service_id
 WHERE cd.exception_type = 1;
+
+
+-- 4. View: Líneas activas por fecha (Para saber qué opera hoy)
+CREATE OR REPLACE VIEW gtfs_raw.v_lineas_activas_fecha AS
+SELECT DISTINCT 
+    r.route_short_name AS linea, 
+    cd.date AS fecha
+FROM gtfs_raw.routes r
+JOIN gtfs_raw.trips t ON r.route_id = t.route_id
+JOIN gtfs_raw.calendar_dates cd ON t.service_id = cd.service_id
+WHERE cd.exception_type = 1;
+
+-- 5. View: Conexiones Directas (Pares Origen-Destino sin transbordo)
+-- Nota: Limitamos a la misma línea y viaje para evitar cruces masivos
+CREATE OR REPLACE VIEW gtfs_raw.v_conexiones_directas AS
+SELECT DISTINCT
+    r.route_short_name AS linea,
+    s1.stop_name AS origen,
+    s2.stop_name AS destino
+FROM gtfs_raw.stop_times st1
+JOIN gtfs_raw.stop_times st2 ON st1.trip_id = st2.trip_id AND st1.stop_sequence < st2.stop_sequence
+JOIN gtfs_raw.trips t ON st1.trip_id = t.trip_id
+JOIN gtfs_raw.routes r ON t.route_id = r.route_id
+JOIN gtfs_raw.stops s1 ON st1.stop_id = s1.stop_id
+JOIN gtfs_raw.stops s2 ON st2.stop_id = s2.stop_id;
+
+-- 6. View: Headways (Frecuencia de paso en minutos por línea y parada)
+-- Usamos funciones ventana (LAG) para comparar la hora con el viaje anterior
+CREATE OR REPLACE VIEW gtfs_raw.v_headways AS
+WITH tiempos AS (
+    SELECT 
+        r.route_short_name AS linea,
+        s.stop_name AS parada,
+        st.arrival_time,
+        -- Extraemos solo la hora para hacer una agrupación básica (ej. "A las 08:00 pasan 4 guaguas")
+        SUBSTRING(st.arrival_time FROM 1 FOR 2) AS franja_horaria
+    FROM gtfs_raw.routes r
+    JOIN gtfs_raw.trips t ON r.route_id = t.route_id
+    JOIN gtfs_raw.stop_times st ON t.trip_id = st.trip_id
+    JOIN gtfs_raw.stops s ON st.stop_id = s.stop_id
+)
+SELECT 
+    linea,
+    parada,
+    franja_horaria,
+    COUNT(*) AS expediciones_por_hora,
+    ROUND(60.0 / NULLIF(COUNT(*), 0)) AS frecuencia_estimada_minutos
+FROM tiempos
+GROUP BY linea, parada, franja_horaria
+ORDER BY linea, parada, franja_horaria;
 """
 
 def extract_latest_gtfs():
@@ -198,6 +248,13 @@ def load_data_to_postgres(staging_path):
         "shapes.txt", "trips.txt", "stop_times.txt"
     ]
 
+    # Defines minimum mandatory columns to validate before loading
+    mandatory_columns = {
+        "routes.txt": ["route_id", "route_short_name"],
+        "stops.txt": ["stop_id", "stop_name", "stop_lat"],
+        "stop_times.txt": ["trip_id", "arrival_time", "stop_id"]
+    }
+
     conn = None
     try:
         # Connect to the PostgreSQL database
@@ -214,8 +271,12 @@ def load_data_to_postgres(staging_path):
             table_name = file_name.replace(".txt", "")
 
             if os.path.exists(file_path):
+                # 1. Validar columnas si el archivo es obligatorio
+                if file_name in mandatory_columns:
+                    validate_csv_headers(file_path, mandatory_columns[file_name])
+
+                # 2. Cargar datos
                 print(f"Loading {file_name} into gtfs_raw.{table_name}...")
-                # utf-8-sig removes the BOM (Byte Order Mark) if it exists at the start of the file
                 with open(file_path, 'r', encoding='utf-8-sig') as f:
                     copy_sql = f"COPY gtfs_raw.{table_name} FROM STDIN WITH CSV HEADER DELIMITER ','"
                     cur.copy_expert(sql=copy_sql, file=f)
@@ -227,8 +288,12 @@ def load_data_to_postgres(staging_path):
         cur.execute(INDEX_QUERIES)
         conn.commit()
 
+        print("Generating analytical views...")
+        cur.execute(VIEWS_QUERIES)
+        conn.commit()
+
         cur.close()
-        print("Data loaded and indexed successfully!")
+        print("Data loaded, indexed, and views generated successfully!")
 
     except psycopg2.Error as e:
         print(f"Database error occurred: {e}")

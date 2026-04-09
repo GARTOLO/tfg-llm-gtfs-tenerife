@@ -12,5 +12,19 @@ services:
       - pg_data:/var/lib/postgresql/data
       - ./data/raw:/data/raw
 
+  otp:
+      image: docker.io/opentripplanner/opentripplanner:latest
+      container_name: otp_tfg
+      ports:
+        - "8080:8080" # API port and UI
+      volumes:
+        # Connecting the local GTFS data to the OTP container
+        - ./data/otp:/var/otp/graphs/default
+      command: --load --serve # By default, serve it
+      # OTP needs RAM to build the graph, so we set a limit here.
+      deploy:
+        resources:
+          limits:
+            memory: 4G
 volumes:
   pg_data:
