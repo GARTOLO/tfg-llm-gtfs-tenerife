@@ -1,4 +1,4 @@
-"""Lanzador simple para ejecutar el ETL completo desde la raíz del proyecto."""
+"""Simple launcher to run the complete ETL pipeline from the project root."""
 
 import psycopg2
 
@@ -7,7 +7,7 @@ from src.etl.download_gtfs import download_gtfs
 from src.etl.download_od import download_od_matrices, get_recent_od_datasets
 from src.etl.load_gtfs import extract_latest_gtfs, load_data_to_postgres
 from src.etl.load_od import DDL_QUERIES, extract_latest_od, load_matrix_csvs, load_spatial_data
-
+from src.etl.rebuild_otp import rebuild_otp_graph
 
 def run_pipeline():
     print("=======================================")
@@ -56,8 +56,11 @@ def run_pipeline():
         if conn:
             conn.close()
 
+    print("\n--- PHASE 5: Rebuilding OTP Routing Engine ---")
+    rebuild_otp_graph() # <-- Execute the new phase
+
     print("\n=======================================")
-    print(" ETL PIPELINE COMPLETED")
+    print(" ETL PIPELINE COMPLETED SUCCESSFULLY")
     print("=======================================")
 
 

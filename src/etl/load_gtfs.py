@@ -250,9 +250,11 @@ def load_data_to_postgres(staging_path):
 
     # Defines minimum mandatory columns to validate before loading
     mandatory_columns = {
-        "routes.txt": ["route_id", "route_short_name"],
-        "stops.txt": ["stop_id", "stop_name", "stop_lat"],
-        "stop_times.txt": ["trip_id", "arrival_time", "stop_id"]
+        "agency.txt": ["agency_id", "agency_name", "agency_url", "agency_timezone"],
+        "routes.txt": ["route_id", "agency_id", "route_short_name", "route_long_name", "route_type"],
+        "stops.txt": ["stop_id", "stop_name", "stop_lat", "stop_lon"],
+        "trips.txt": ["route_id", "service_id", "trip_id", "shape_id"],
+        "stop_times.txt": ["trip_id", "arrival_time", "departure_time", "stop_id", "stop_sequence"]
     }
 
     conn = None
@@ -274,6 +276,7 @@ def load_data_to_postgres(staging_path):
                 # 1. Validar columnas si el archivo es obligatorio
                 if file_name in mandatory_columns:
                     validate_csv_headers(file_path, mandatory_columns[file_name])
+                    print(f"Validation passed for {file_name}. All mandatory columns are present.")
 
                 # 2. Cargar datos
                 print(f"Loading {file_name} into gtfs_raw.{table_name}...")

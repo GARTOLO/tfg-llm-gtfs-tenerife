@@ -141,7 +141,7 @@ def load_matrix_csvs(cur, staging_path):
 
     for f in csv_files:
         name = os.path.basename(f).lower()
-        if "no_laborable" in name or "festivo" in name:
+        if "no laborable" in name or "no_laborable" in name or "festivo" in name:
             festivos_file = f
         elif "laborable" in name:
             laborables_file = f

@@ -16,12 +16,10 @@ services:
       image: docker.io/opentripplanner/opentripplanner:latest
       container_name: otp_tfg
       ports:
-        - "8080:8080" # API port and UI
+        - "8080:8080"
       volumes:
-        # Connecting the local GTFS data to the OTP container
-        - ./data/otp:/var/otp/graphs/default
-      command: --load --serve # By default, serve it
-      # OTP needs RAM to build the graph, so we set a limit here.
+        - ./data/otp:/var/opentripplanner
+      command: --load --serve
       deploy:
         resources:
           limits:
