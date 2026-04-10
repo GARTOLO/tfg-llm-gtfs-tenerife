@@ -1,17 +1,51 @@
 import os
 import shutil
 import subprocess
+import requests
 
 # Directories
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 RAW_GTFS_DIR = os.path.join(BASE_DIR, "data", "raw", "gtfs")
 OTP_DIR = os.path.join(BASE_DIR, "data", "otp")
 
+# OSM Download parameters
+OSM_URL = "https://download.geofabrik.de/africa/canary-islands-latest.osm.pbf"
+TARGET_OSM_FILE = os.path.join(OTP_DIR, "canary-islands-latest.osm.pbf")
+
+
+def download_osm_data():
+    """Downloads the latest OSM PBF file from Geofabrik if it doesn't exist."""
+    print("Checking OpenStreetMap (OSM) data...")
+    os.makedirs(OTP_DIR, exist_ok=True)
+
+    # We check if it exists to prevent being rate-limited/banned by Geofabrik during testing
+    if os.path.exists(TARGET_OSM_FILE):
+        print(f"-> OSM file already exists. Skipping download.")
+        return
+
+    print(f"-> Downloading OSM data from {OSM_URL} (This may take a moment)...")
+
+    try:
+        # stream=True allows us to download large files without consuming too much RAM
+        with requests.get(OSM_URL, stream=True) as r:
+            r.raise_for_status()
+            with open(TARGET_OSM_FILE, 'wb') as f:
+                for chunk in r.iter_content(chunk_size=8192):
+                    f.write(chunk)
+        print("-> OSM data downloaded successfully.")
+    except requests.exceptions.RequestException as e:
+        print(f"Critical error downloading OSM data: {e}")
+        raise
+
+
 def rebuild_otp_graph():
-    """Copies the most recent GTFS zip to the OTP folder and rebuilds the graph in Docker."""
+    """Copies the most recent GTFS zip, ensures OSM exists, and rebuilds the graph in Docker."""
     print("--- Phase 5: Rebuilding OpenTripPlanner Graph ---")
 
-    # 1. Find the most recently downloaded GTFS
+    # 1. Download/Verify OSM Data
+    download_osm_data()
+
+    # 2. Find the most recently downloaded GTFS
     if not os.path.exists(RAW_GTFS_DIR):
         raise FileNotFoundError(f"GTFS directory not found: {RAW_GTFS_DIR}")
 
@@ -25,13 +59,12 @@ def rebuild_otp_graph():
     if not os.path.exists(source_gtfs):
         raise FileNotFoundError(f"ZIP file not found at {source_gtfs}")
 
-    # 2. Copy the ZIP to the OTP folder (overwriting the old one)
+    # 3. Copy the GTFS ZIP to the OTP folder (overwriting the old one)
     target_gtfs = os.path.join(OTP_DIR, "gtfs_titsa.zip")
     print(f"Copying {source_gtfs} -> {OTP_DIR}...")
-    os.makedirs(OTP_DIR, exist_ok=True)
     shutil.copy2(source_gtfs, target_gtfs)
 
-    # 3. Docker commands via Subprocess
+    # 4. Docker commands via Subprocess
     try:
         # A) Stop the current OTP server (to free up RAM for the build process)
         print("Stopping current OTP server...")

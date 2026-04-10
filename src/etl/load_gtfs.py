@@ -94,7 +94,7 @@ CREATE TABLE gtfs_raw.stop_times (
 );
 """
 
-# Recommended indexes for performance [cite: 107-112]
+# Recommended indexes for performance
 INDEX_QUERIES = """
 CREATE INDEX IF NOT EXISTS idx_st_stop_time ON gtfs_raw.stop_times(stop_id, departure_time);
 CREATE INDEX IF NOT EXISTS idx_st_trip_seq ON gtfs_raw.stop_times(trip_id, stop_sequence);
@@ -254,7 +254,9 @@ def load_data_to_postgres(staging_path):
         "routes.txt": ["route_id", "agency_id", "route_short_name", "route_long_name", "route_type"],
         "stops.txt": ["stop_id", "stop_name", "stop_lat", "stop_lon"],
         "trips.txt": ["route_id", "service_id", "trip_id", "shape_id"],
-        "stop_times.txt": ["trip_id", "arrival_time", "departure_time", "stop_id", "stop_sequence"]
+        "stop_times.txt": ["trip_id", "arrival_time", "departure_time", "stop_id", "stop_sequence"],
+        "calendar_dates.txt": ["service_id", "date", "exception_type"],
+        "calendar.txt": ["service_id", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday", "start_date", "end_date"]
     }
 
     conn = None
@@ -273,12 +275,12 @@ def load_data_to_postgres(staging_path):
             table_name = file_name.replace(".txt", "")
 
             if os.path.exists(file_path):
-                # 1. Validar columnas si el archivo es obligatorio
+                # 1. Validate mandatory columns before loading
                 if file_name in mandatory_columns:
                     validate_csv_headers(file_path, mandatory_columns[file_name])
                     print(f"Validation passed for {file_name}. All mandatory columns are present.")
 
-                # 2. Cargar datos
+                # 2. Load data using COPY for performance
                 print(f"Loading {file_name} into gtfs_raw.{table_name}...")
                 with open(file_path, 'r', encoding='utf-8-sig') as f:
                     copy_sql = f"COPY gtfs_raw.{table_name} FROM STDIN WITH CSV HEADER DELIMITER ','"
