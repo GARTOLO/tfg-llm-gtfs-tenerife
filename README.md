@@ -3,9 +3,12 @@ TFG: Desarrollo de un asistente conversacional basado en LLM para la red de tran
 
 ## Flujo de trabajo (resumen)
 1. Levantar la base de datos PostgreSQL/PostGIS.
-2. Ejecutar el script único de ETL para descargar los datos crudos (GTFS y matrices OD) en `data/raw/`.
+2. Ejecutar la descarga ETL para guardar datos crudos en `data/raw/`:
+   - GTFS de TITSA (`gtfs_titsa.zip`).
+   - GTFS de Metro/Tranvia (`gtfs_metro.zip`).
+   - Matrices OD.
 3. Ejecutar las cargas ETL para poblar PostgreSQL/PostGIS:
-   - GTFS en esquema `gtfs_raw`.
+   - GTFS (ambos feeds) en esquema `gtfs_raw` con columna `feed_id`.
    - OD en esquema `analytics`.
 
 ## Ejecución rápida
@@ -23,6 +26,14 @@ py src/etl/download_gtfs.py
 py src/etl/download_od.py
 py src/etl/load_gtfs.py
 py src/etl/load_od.py
+```
+
+Consulta rapida para verificar carga por feed:
+
+```sql
+SELECT feed_id, COUNT(*) AS total_trips
+FROM gtfs_raw.trips
+GROUP BY feed_id;
 ```
 
 > Si tu instalación usa `python` en lugar de `py`, puedes sustituir el comando sin problema.

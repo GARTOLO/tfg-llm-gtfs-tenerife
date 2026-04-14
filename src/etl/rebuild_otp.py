@@ -2,6 +2,7 @@ import os
 import shutil
 import subprocess
 import requests
+import glob
 
 # Directories
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -11,6 +12,7 @@ OTP_DIR = os.path.join(BASE_DIR, "data", "otp")
 # OSM Download parameters
 OSM_URL = "https://download.geofabrik.de/africa/canary-islands-latest.osm.pbf"
 TARGET_OSM_FILE = os.path.join(OTP_DIR, "canary-islands-latest.osm.pbf")
+GTFS_ZIP_FILES = ["gtfs_titsa.zip", "gtfs_metro.zip"]
 
 
 def download_osm_data():
@@ -45,7 +47,7 @@ def rebuild_otp_graph():
     # 1. Download/Verify OSM Data
     download_osm_data()
 
-    # 2. Find the most recently downloaded GTFS
+    # 2. Find the most recently downloaded GTFS folder
     if not os.path.exists(RAW_GTFS_DIR):
         raise FileNotFoundError(f"GTFS directory not found: {RAW_GTFS_DIR}")
 
@@ -54,15 +56,24 @@ def rebuild_otp_graph():
         raise FileNotFoundError("No downloaded GTFS data found.")
 
     latest_folder = date_folders[0]
-    source_gtfs = os.path.join(latest_folder, "gtfs_titsa.zip")
 
-    if not os.path.exists(source_gtfs):
-        raise FileNotFoundError(f"ZIP file not found at {source_gtfs}")
+    # 3. Replace GTFS ZIP files in OTP folder with latest available ones
+    for existing_zip in glob.glob(os.path.join(OTP_DIR, "gtfs_*.zip")):
+        os.remove(existing_zip)
 
-    # 3. Copy the GTFS ZIP to the OTP folder (overwriting the old one)
-    target_gtfs = os.path.join(OTP_DIR, "gtfs_titsa.zip")
-    print(f"Copying {source_gtfs} -> {OTP_DIR}...")
-    shutil.copy2(source_gtfs, target_gtfs)
+    copied_count = 0
+    for zip_name in GTFS_ZIP_FILES:
+        source_gtfs = os.path.join(latest_folder, zip_name)
+        if not os.path.exists(source_gtfs):
+            print(f"Warning: ZIP file not found at {source_gtfs}. Skipping.")
+            continue
+
+        print(f"Copying {source_gtfs} -> {OTP_DIR}...")
+        shutil.copy2(source_gtfs, os.path.join(OTP_DIR, zip_name))
+        copied_count += 1
+
+    if copied_count == 0:
+        raise FileNotFoundError(f"No GTFS ZIP files were found in {latest_folder}")
 
     # 4. Docker commands via Subprocess
     try:
