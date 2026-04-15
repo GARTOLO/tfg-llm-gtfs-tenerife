@@ -1,7 +1,8 @@
 import os
 import shutil
 import zipfile
-
+import csv
+import io
 import psycopg2
 
 from src.config import DB_PARAMS
@@ -39,8 +40,7 @@ CREATE TABLE gtfs_raw.agency (
     agency_url VARCHAR(255),
     agency_timezone VARCHAR(50),
     agency_lang VARCHAR(10),
-    agency_phone VARCHAR(50),
-    PRIMARY KEY (feed_id, agency_id)
+    agency_phone VARCHAR(50)
 );
 
 CREATE TABLE gtfs_raw.routes (
@@ -289,18 +289,12 @@ def validate_csv_headers(file_path, expected_columns):
 
 
 def _load_feed_table(cur, file_path, table_name, feed_id):
-    """Loads one GTFS text file into its table using COPY + feed tagging robustly."""
+    """Loads one GTFS text file into its table using COPY + feed tagging robustly, filtering columns in memory."""
     temp_table = f"stg_{table_name}_{feed_id}"
 
     cur.execute(f"DROP TABLE IF EXISTS {temp_table};")
     cur.execute(f"CREATE TEMP TABLE {temp_table} (LIKE gtfs_raw.{table_name} INCLUDING DEFAULTS);")
     cur.execute(f"ALTER TABLE {temp_table} DROP COLUMN feed_id;")
-
-    # 1. Read dynamically the columns that actually come in this CSV (Some feeds may have extra columns we don't care about, or may be missing optional ones)
-    with open(file_path, "r", encoding="utf-8-sig") as f:
-        header_line = f.readline().strip()
-
-        csv_columns = [col.strip('"') for col in header_line.split(',')]
 
     columns_dict = {
         "agency": ["agency_id", "agency_name", "agency_url", "agency_timezone", "agency_lang", "agency_phone"],
@@ -315,22 +309,37 @@ def _load_feed_table(cur, file_path, table_name, feed_id):
         "stop_times": ["trip_id", "arrival_time", "departure_time", "stop_id", "stop_sequence"],
     }
 
-    # 3. Validate that the CSV columns match the expected ones for this table, and only copy those
     valid_table_columns = columns_dict[table_name]
-    copy_columns = [col for col in csv_columns if col in valid_table_columns]
 
-    if not copy_columns:
-        print(f"Warning: No valid columns found for {table_name} in {feed_id}. Skipping.")
-        return
+    # 1. Usar un búfer de memoria para limpiar el CSV antes de dárselo a PostgreSQL
+    buffer = io.StringIO()
 
+    with open(file_path, "r", encoding="utf-8-sig") as f:
+        # csv.DictReader es vital porque entiende si hay comas DENTRO del texto (ej. nombres de paradas)
+        reader = csv.DictReader(f)
+
+        # Intersección: Qué columnas de este CSV nos interesan realmente
+        copy_columns = [col for col in reader.fieldnames if col in valid_table_columns]
+
+        if not copy_columns:
+            print(f"Warning: No valid columns found for {table_name} in {feed_id}. Skipping.")
+            return
+
+        # Escribimos en el búfer solo las columnas válidas, ignorando el resto (extrasaction='ignore')
+        writer = csv.DictWriter(buffer, fieldnames=copy_columns, extrasaction='ignore')
+        writer.writeheader()
+        for row in reader:
+            writer.writerow(row)
+
+    # 2. Rebobinar el búfer al principio para que Postgres pueda leerlo
+    buffer.seek(0)
     col_string = ", ".join(copy_columns)
 
-    # 4. Insert data into temp table using COPY
-    with open(file_path, "r", encoding="utf-8-sig") as f:
-        copy_sql = f"COPY {temp_table} ({col_string}) FROM STDIN WITH CSV HEADER DELIMITER ','"
-        cur.copy_expert(sql=copy_sql, file=f)
+    # 3. Inyectar datos desde el búfer de memoria
+    copy_sql = f"COPY {temp_table} ({col_string}) FROM STDIN WITH CSV HEADER DELIMITER ','"
+    cur.copy_expert(sql=copy_sql, file=buffer)
 
-    # 5. Insert from temp table to final table with feed_id tagging
+    # 4. Insertar en la tabla final añadiendo el feed_id
     cur.execute(
         f"""
         INSERT INTO gtfs_raw.{table_name} (feed_id, {col_string})
@@ -361,7 +370,7 @@ def load_data_to_postgres(staging_paths):
     ]
 
     mandatory_columns = {
-        "agency.txt": ["agency_id", "agency_name", "agency_url", "agency_timezone"],
+        "agency.txt": ["agency_name", "agency_url", "agency_timezone"],
         "routes.txt": ["route_id", "route_short_name", "route_long_name", "route_type"],
         "stops.txt": ["stop_id", "stop_name", "stop_lat", "stop_lon"],
         "trips.txt": ["route_id", "service_id", "trip_id", "shape_id"],

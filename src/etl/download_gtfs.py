@@ -2,6 +2,8 @@ import os
 import requests
 from datetime import datetime
 
+from src.etl.data_wrangling import fix_expired_gtfs_zip
+
 # CKAN API URL template
 GTFS_API_URL = "https://datos.tenerife.es/ckan/api/action/package_show?id={package_id}"
 
@@ -72,6 +74,9 @@ def download_gtfs():
                 for chunk in r.iter_content(chunk_size=8192):
                     if chunk:
                         f.write(chunk)
+
+        print(f"Validando fechas operativas de '{feed_id}'...")
+        fix_expired_gtfs_zip(file_path)
 
         downloaded_files[feed_id] = file_path
 
