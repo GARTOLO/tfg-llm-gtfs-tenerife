@@ -24,4 +24,4 @@ if __name__ == "__main__":
     asyncio.run(show_registered_tools())
 
     # 2. Start the MCP server
-    mcp.run()
+    mcp.run(transport="sse")
