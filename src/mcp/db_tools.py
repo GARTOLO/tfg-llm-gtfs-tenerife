@@ -18,7 +18,7 @@ def get_coordinates(location_name: str) -> str:
     query = f"{location_name}, Tenerife, Islas Canarias, España"
 
     # An exception will be thrown if a custom user_agent is not specified.
-    geolocator = Nominatim(user_agent="TransitGPT_Tenerife_TFG")
+    geolocator = Nominatim(user_agent="TitsaGPT_Tenerife_TFG")
 
     try:
         location = geolocator.geocode(query, timeout=10)

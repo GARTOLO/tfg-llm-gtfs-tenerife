@@ -17,6 +17,8 @@ from langchain_core.tools import tool
 # Import the personality and instructions
 from prompts import SYSTEM_PROMPT
 
+from datetime import datetime
+
 # Load environment variables
 load_dotenv()
 
@@ -70,12 +72,30 @@ async def start_langchain_agent():
                 llm_with_tools = llm.bind_tools(mcp_tools)
 
                 # Context Memory
-                messages: List[BaseMessage] = [
-                    SystemMessage(content=SYSTEM_PROMPT),
+                # 1. Get the current system time
+                now = datetime.now()
+                date_str = now.strftime("%Y-%m-%d")
+                time_str = now.strftime("%H:%M")
+
+                days_of_week = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo (Festivo)"]
+                current_day = days_of_week[now.weekday()]
+
+                # 2. Create a dynamic text block
+                time_context = f"""
+
+                CONTEXTO TEMPORAL ACTUAL (¡CRÍTICO!):
+                - La fecha y hora actual en la que te habla el usuario es: {current_day}, {date_str} a las {time_str} (Hora de Canarias).
+                - Si el usuario pide una ruta "ahora" o no especifica la hora, DEBES usar obligatoriamente las {time_str} al llamar a la herramienta 'plan_trip'.
+                - Si el usuario dice "mañana", suma un día a la fecha actual para tus cálculos.
+                """
+
+                # 3. Concatenate your static prompt with the dynamic clock
+                messages = [
+                    SystemMessage(content=SYSTEM_PROMPT + time_context)
                 ]
 
                 print("\n" + "=" * 50)
-                print("🚌 TransitGPT Tenerife - Chat Started 🚊")
+                print("🚌 TitsaGPT Tenerife - Chat Started 🚊")
                 print("Type 'exit' or 'quit' to terminate.")
                 print("=" * 50 + "\n")
 
