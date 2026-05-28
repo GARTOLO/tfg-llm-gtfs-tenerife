@@ -131,7 +131,7 @@ CREATE INDEX IF NOT EXISTS idx_cal_dates ON gtfs_raw.calendar_dates(feed_id, dat
 
 # Views for analytical querying and LLM consumption
 VIEWS_QUERIES = """
--- 1. View: Itinerario de paradas ordenado por linea y operador
+-- 1. View: Stops ordered by line and operator
 CREATE OR REPLACE VIEW gtfs_raw.v_paradas_por_linea AS
 SELECT DISTINCT
     r.feed_id,
@@ -147,7 +147,7 @@ JOIN gtfs_raw.stop_times st ON t.feed_id = st.feed_id AND t.trip_id = st.trip_id
 JOIN gtfs_raw.stops s ON st.feed_id = s.feed_id AND st.stop_id = s.stop_id
 ORDER BY r.feed_id, r.route_short_name, t.trip_headsign, st.stop_sequence;
 
--- 2. View: Primer y ultimo servicio del dia por linea y destino
+-- 2. View: First and last service of the day by line and destination
 CREATE OR REPLACE VIEW gtfs_raw.v_primer_ultimo_servicio AS
 SELECT
     r.feed_id,
@@ -161,7 +161,7 @@ JOIN gtfs_raw.stop_times st ON t.feed_id = st.feed_id AND t.trip_id = st.trip_id
 GROUP BY r.feed_id, r.route_short_name, t.trip_headsign
 ORDER BY r.feed_id, r.route_short_name;
 
--- 3. View: Horarios detallados (usa calendar_dates)
+-- 3. View: Detailed schedules by line and stop (using calendar_dates for actual operation days)
 CREATE OR REPLACE VIEW gtfs_raw.v_horarios_linea_parada AS
 SELECT
     r.feed_id,
@@ -176,7 +176,7 @@ JOIN gtfs_raw.stops s ON st.feed_id = s.feed_id AND st.stop_id = s.stop_id
 JOIN gtfs_raw.calendar_dates cd ON t.feed_id = cd.feed_id AND t.service_id = cd.service_id
 WHERE cd.exception_type = 1;
 
--- 4. View: Lineas activas por fecha
+-- 4. View: Lines active on specific dates (using calendar_dates)
 CREATE OR REPLACE VIEW gtfs_raw.v_lineas_activas_fecha AS
 SELECT DISTINCT
     r.feed_id,
@@ -187,7 +187,7 @@ JOIN gtfs_raw.trips t ON r.feed_id = t.feed_id AND r.route_id = t.route_id
 JOIN gtfs_raw.calendar_dates cd ON t.feed_id = cd.feed_id AND t.service_id = cd.service_id
 WHERE cd.exception_type = 1;
 
--- 5. View: Conexiones directas
+-- 5. View: Direct connections
 CREATE OR REPLACE VIEW gtfs_raw.v_conexiones_directas AS
 SELECT DISTINCT
     r.feed_id,
@@ -204,7 +204,7 @@ JOIN gtfs_raw.routes r ON t.feed_id = r.feed_id AND t.route_id = r.route_id
 JOIN gtfs_raw.stops s1 ON st1.feed_id = s1.feed_id AND st1.stop_id = s1.stop_id
 JOIN gtfs_raw.stops s2 ON st2.feed_id = s2.feed_id AND st2.stop_id = s2.stop_id;
 
--- 6. View: Headways por linea y parada
+-- 6. View: Headways by line and stop
 CREATE OR REPLACE VIEW gtfs_raw.v_headways AS
 WITH tiempos AS (
     SELECT
@@ -311,35 +311,35 @@ def _load_feed_table(cur, file_path, table_name, feed_id):
 
     valid_table_columns = columns_dict[table_name]
 
-    # 1. Usar un búfer de memoria para limpiar el CSV antes de dárselo a PostgreSQL
+    # 1. Use an in-memory buffer to clean the CSV before handing it to PostgreSQL
     buffer = io.StringIO()
 
     with open(file_path, "r", encoding="utf-8-sig") as f:
-        # csv.DictReader es vital porque entiende si hay comas DENTRO del texto (ej. nombres de paradas)
+        # csv.DictReader is essential because it handles commas INSIDE text fields (e.g. stop names)
         reader = csv.DictReader(f)
 
-        # Intersección: Qué columnas de este CSV nos interesan realmente
+        # Intersect the CSV columns with the ones we actually need
         copy_columns = [col for col in reader.fieldnames if col in valid_table_columns]
 
         if not copy_columns:
             print(f"Warning: No valid columns found for {table_name} in {feed_id}. Skipping.")
             return
 
-        # Escribimos en el búfer solo las columnas válidas, ignorando el resto (extrasaction='ignore')
+        # Write only the valid columns to the buffer, ignoring the rest (extrasaction='ignore')
         writer = csv.DictWriter(buffer, fieldnames=copy_columns, extrasaction='ignore')
         writer.writeheader()
         for row in reader:
             writer.writerow(row)
 
-    # 2. Rebobinar el búfer al principio para que Postgres pueda leerlo
+    # 2. Rewind the buffer to the beginning so Postgres can read it
     buffer.seek(0)
     col_string = ", ".join(copy_columns)
 
-    # 3. Inyectar datos desde el búfer de memoria
+    # 3. Load data from the in-memory buffer
     copy_sql = f"COPY {temp_table} ({col_string}) FROM STDIN WITH CSV HEADER DELIMITER ','"
     cur.copy_expert(sql=copy_sql, file=buffer)
 
-    # 4. Insertar en la tabla final añadiendo el feed_id
+    # 4. Insert into the final table while adding feed_id
     cur.execute(
         f"""
         INSERT INTO gtfs_raw.{table_name} (feed_id, {col_string})
@@ -437,10 +437,16 @@ def load_data_to_postgres(staging_paths):
             conn.close()
 
 
-if __name__ == "__main__":
+def main():
+    """Main entry point for GTFS loading pipeline."""
     try:
         extracted_paths = extract_latest_gtfs()
         load_data_to_postgres(extracted_paths)
     except Exception as e:
         print(f"ETL Process Failed: {e}")
+        raise
+
+
+if __name__ == "__main__":
+    main()
 

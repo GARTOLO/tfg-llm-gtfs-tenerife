@@ -2,7 +2,6 @@
 
 import os
 import asyncio
-import json
 import traceback
 from typing import List
 from dotenv import load_dotenv
@@ -90,24 +89,57 @@ async def start_langchain_agent():
                     messages.append(HumanMessage(content=user_input))
 
                     # Get Gemini's response
-                    response = await llm_with_tools.ainvoke(messages)
-                    messages.append(response)
+                    try:
+                        response = await llm_with_tools.ainvoke(messages)
+                        messages.append(response)
+                    except Exception as google_error:
+                        print(f"❌ Error temporal en el servidor de lenguaje (Google): {google_error}")
+                        print(
+                            "🤖 Agent: Lo siento, sufro una alta latencia con mi servidor central. ¿Podrías repetir la consulta?")
+                        continue
 
-                    # Execute tool if Gemini requested it
-                    if response.tool_calls:
+                        # 2. Autonomous tool loop
+                    while response.tool_calls:
                         for tool_call in response.tool_calls:
                             print(f"⚙️  Agent is calling MCP tool: {tool_call['name']}...")
 
-                            result = await session.call_tool(tool_call['name'], arguments=tool_call["args"])
+                            # =========================================================
+                            # Strict argument sanitization layer
+                            # =========================================================
+                            raw_args = tool_call["args"]
+                            if "kwargs" in raw_args and len(raw_args) == 1:
+                                raw_args = raw_args["kwargs"]
+
+                            clean_args = {}
+                            alias_map = {
+                                "linea_id": "route_id", "line_id": "route_id", "line": "route_id",
+                                "parada_id": "stop_id", "stop": "stop_id",
+                                "tipo_dia": "day_type", "day_of_week": "day_type", "day": "day_type",
+                                "address": "location_name", "location": "location_name", "lugar": "location_name",
+                                "origin_latitude": "origin_lat",
+                                "origin_longitude": "origin_lon",
+                                "destination_latitude": "destination_lat",
+                                "destination_longitude": "destination_lon"
+                            }
+
+                            for k, v in raw_args.items():
+                                new_name = alias_map.get(k, k)
+                                clean_args[new_name] = str(v)
+
+                            if tool_call["name"] == "get_line_occupancy":
+                                clean_args.pop("time", None)
+                                clean_args.pop("hour", None)
+                                clean_args.pop("hora", None)
+
+                            # Execute tool
+                            result = await session.call_tool(tool_call['name'], arguments=clean_args)
 
                             if hasattr(result, 'content') and isinstance(result.content, list):
                                 tool_text = "\n".join(block.text for block in result.content if hasattr(block, 'text'))
                             else:
                                 tool_text = str(result)
 
-                            # tool_to_execute = next(t for t in mcp_tools if t.name == tool_call['name'])
-                            # tool_result = await tool_to_execute.ainvoke(tool_call["args"])
-                            print(f"✅ Tool '{tool_call['name']}' returned: {tool_text}")
+                            print(f"✅ Tool '{tool_call['name']}' returned data successfully.")
 
                             messages.append(ToolMessage(
                                 tool_call_id=tool_call['id'],
@@ -115,12 +147,19 @@ async def start_langchain_agent():
                                 content=tool_text
                             ))
 
-                        # Get final human-readable response
-                        final_response = await llm_with_tools.ainvoke(messages)
-                        print(f"🤖 Agent: {extract_clean_text(final_response.content)}")
-                        messages.append(final_response)
+                        # 3. Next loop iteration protected against Google call failures
+                        try:
+                            response = await llm_with_tools.ainvoke(messages)
+                            messages.append(response)
+                        except Exception as google_error:
+                            print(f"❌ Error en la llamada de retorno (Google): {google_error}")
+                            response.tool_calls = []
+                            print(
+                                "🤖 Agent: He recopilado los datos pero mis servidores están saturados para procesar la respuesta final.")
+                            break
 
-                    else:
+                        # 4. Final response to user
+                    if response.content:
                         print(f"🤖 Agent: {extract_clean_text(response.content)}")
 
     except Exception as e:

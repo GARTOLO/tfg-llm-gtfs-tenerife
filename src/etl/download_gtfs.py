@@ -75,7 +75,7 @@ def download_gtfs():
                     if chunk:
                         f.write(chunk)
 
-        print(f"Validando fechas operativas de '{feed_id}'...")
+        print(f"Validating operating dates for '{feed_id}'...")
         fix_expired_gtfs_zip(file_path)
 
         downloaded_files[feed_id] = file_path
