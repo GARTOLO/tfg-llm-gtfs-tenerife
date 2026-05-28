@@ -29,7 +29,7 @@ def run_pipeline():
     load_od_main()
 
     print("\n--- PHASE 5: Rebuilding OTP Routing Engine ---")
-    rebuild_otp_graph() # <-- Execute the new phase
+    rebuild_otp_graph()
 
     print("\n=======================================")
     print(" ETL PIPELINE COMPLETED SUCCESSFULLY")

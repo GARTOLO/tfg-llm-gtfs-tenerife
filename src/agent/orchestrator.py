@@ -14,7 +14,6 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import tool
 
-# Import the personality and instructions
 from prompts import SYSTEM_PROMPT
 
 from datetime import datetime
@@ -187,7 +186,7 @@ async def start_langchain_agent():
         print("Did you forget to run 'python src/mcp/server.py' in a separate PyCharm terminal?")
         print(f"Details: {e}")
         print("--- FULL ERROR TRACEBACK ---")
-        traceback.print_exc()  # This will unpack the TaskGroup and show us the real error!
+        traceback.print_exc()
         print("----------------------------")
 
 
