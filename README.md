@@ -1,4 +1,4 @@
-# tfg-llm-gtfs-tenerife
+# tfg-llm-gtfs-tenerife - TitsaGPT
 TFG: Desarrollo de un asistente conversacional basado en LLM para la red de transporte público de Tenerife integrando datos GTFS y estimación de ocupación.
 
 Este repositorio contiene el ETL para GTFS y matrices O-D, herramientas de consulta y un servidor MCP (Minimal Chat Protocol) que expone utilidades (herramientas) para un agente LLM (orquestador).
