@@ -5,7 +5,7 @@ from db_tools import get_routes_demo
 from otp_tools import plan_trip
 from db_tools import get_line_occupancy,get_stop_info,get_route_info,get_coordinates
 
-mcp = FastMCP("Tenerife_Transport_MCP 🚌🚊")
+mcp = FastMCP("TitsaGPT_MCP 🚌🚊")
 
 mcp.add_tool(get_routes_demo)
 mcp.add_tool(get_line_occupancy)

@@ -89,7 +89,6 @@ def plan_trip(
             return "No feasible routes were found between these two points for the specified date/time."
 
         # Return the clean JSON to the LLM as a string
-        # LLMs are exceptionally good at parsing standard JSON/dictionaries natively
         itineraries = data["data"]["plan"]["itineraries"]
         return str(itineraries)
 
